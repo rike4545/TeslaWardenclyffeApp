@@ -83,6 +83,7 @@ struct RootView: View {
     ) -> some View {
         NavigationStack {
             content()
+                .wardenclyffeModernNavigationChrome()
                 .toolbar { progressToolbarContent }
         }
         .tabItem { Label(title, systemImage: systemImage) }
