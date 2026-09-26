@@ -7,76 +7,47 @@ enum WardenclyffeTab: Hashable {
     case guide
     case experience
     case lab
-    case events
-    case support
+    case discover
 }
 
 struct RootView: View {
-    @EnvironmentObject private var appModel: AppModel
-
-    // Interactivity layer (injected in TeslaWardenclyffeApp.swift)
     @EnvironmentObject private var fx: InteractionKit
     @EnvironmentObject private var progress: WardenclyffeProgressStore
     @EnvironmentObject private var tower: TowerStateStore
     @EnvironmentObject private var sparks: DailySparkStore
 
     @State private var selectedTab: WardenclyffeTab = .home
-    @State private var showProgressSheet: Bool = false
-    @AppStorage("wardenclyffe.onboarding.complete") private var hasSeenOnboarding: Bool = false
-    @State private var showOnboarding: Bool = false
+    @State private var showProgressSheet = false
+    @AppStorage("wardenclyffe.onboarding.complete") private var hasSeenOnboarding = false
+    @State private var showOnboarding = false
 
     var body: some View {
         ZStack(alignment: .top) {
             TabView(selection: $selectedTab) {
-
-                NavigationStack {
+                tab(.home, title: "Home", systemImage: "sparkles") {
                     HomeView()
-                        .toolbar { hudToolbarButtonIfNeeded }
                 }
-                .tabItem { Label("Home", systemImage: "sparkles") }
-                .tag(WardenclyffeTab.home)
 
-                NavigationStack {
+                tab(.guide, title: "On Site", systemImage: "map") {
                     OnSiteGuideView()
-                        .toolbar { hudToolbarButtonIfNeeded }
                 }
-                .tabItem { Label("On Site", systemImage: "map") }
-                .tag(WardenclyffeTab.guide)
 
-                NavigationStack {
+                tab(.experience, title: "Experience", systemImage: "arkit") {
                     WardenclyffeARExperienceView()
-                        .toolbar { hudToolbarButtonIfNeeded }
                 }
-                .tabItem { Label("Experience", systemImage: "arkit") }
-                .tag(WardenclyffeTab.experience)
 
-                NavigationStack {
+                tab(.lab, title: "Lab", systemImage: "bolt.circle") {
                     VirtualLabView()
-                        .toolbar { hudToolbarButtonIfNeeded }
                 }
-                .tabItem { Label("Lab", systemImage: "bolt.circle") }
-                .tag(WardenclyffeTab.lab)
 
-                NavigationStack {
-                    EventsView()
-                        .toolbar { hudToolbarButtonIfNeeded }
+                tab(.discover, title: "Discover", systemImage: "square.grid.2x2") {
+                    DiscoverHubView()
                 }
-                .tabItem { Label("Events", systemImage: "calendar") }
-                .tag(WardenclyffeTab.events)
-
-                NavigationStack {
-                    SupportView()
-                        .toolbar { hudToolbarButtonIfNeeded }
-                }
-                .tabItem { Label("Support", systemImage: "heart") }
-                .tag(WardenclyffeTab.support)
             }
             .background(WardenclyffeTheme.background.ignoresSafeArea())
             .sensoryFeedback(.selection, trigger: selectedTab)
-            .animation(.snappy, value: selectedTab)
 
             if selectedTab != .home {
-                // Global HUD overlay (tap to open Progress sheet)
                 WardenclyffeHUD(
                     power: progress.totalPower,
                     streak: sparks.currentStreak,
@@ -104,18 +75,44 @@ struct RootView: View {
         }
     }
 
-    // Optional: also offer a toolbar button (nice on iPad / when HUD is subtle)
-    @ToolbarContentBuilder
-    private var hudToolbarButtonIfNeeded: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                fx.impact(.light)
-                showProgressSheet = true
-            } label: {
-                Image(systemName: "gauge.with.dots.needle.50percent")
-            }
-            .accessibilityLabel("Progress")
+    private func tab<Content: View>(
+        _ tab: WardenclyffeTab,
+        title: String,
+        systemImage: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        NavigationStack {
+            content()
+                .toolbar { progressToolbarContent }
         }
+        .tabItem { Label(title, systemImage: systemImage) }
+        .tag(tab)
+    }
+
+    // Xcode 27 unifies SwiftUI result builders under ContentBuilder.
+    @ContentBuilder
+    private var progressToolbarContent: some ToolbarContent {
+        if #available(iOS 27.0, *) {
+            ToolbarItem(placement: .topBarPinnedTrailing) {
+                progressButton
+            }
+            .visibilityPriority(.high)
+        } else {
+            ToolbarItem(placement: .topBarTrailing) {
+                progressButton
+            }
+        }
+    }
+
+    private var progressButton: some View {
+        Button {
+            fx.impact(.light)
+            showProgressSheet = true
+        } label: {
+            Image(systemName: "gauge.with.dots.needle.50percent")
+        }
+        .accessibilityLabel("Progress")
+        .accessibilityHint("Shows your power, streak, tower state, and unlocks.")
     }
 }
 
@@ -177,22 +174,11 @@ private struct WardenclyffeProgressSheet: View {
     var body: some View {
         List {
             Section("Status") {
-                HStack {
-                    Label("Power", systemImage: "bolt.fill")
-                    Spacer()
-                    Text("\(progress.totalPower)").monospacedDigit().foregroundStyle(.secondary)
-                }
-                HStack {
-                    Label("Streak", systemImage: "flame.fill")
-                    Spacer()
-                    Text("\(sparks.currentStreak)").monospacedDigit().foregroundStyle(.secondary)
-                }
-                HStack {
-                    Label("Tower", systemImage: "antenna.radiowaves.left.and.right")
-                    Spacer()
-                    Text(tower.energyState == .energized ? "Energized" : "Idle")
-                        .foregroundStyle(.secondary)
-                }
+                LabeledContent("Power", value: "\(progress.totalPower)")
+                    .monospacedDigit()
+                LabeledContent("Streak", value: "\(sparks.currentStreak)")
+                    .monospacedDigit()
+                LabeledContent("Tower", value: tower.energyState == .energized ? "Energized" : "Idle")
             }
 
             Section("Quick Actions") {
@@ -202,7 +188,10 @@ private struct WardenclyffeProgressSheet: View {
                     progress.addPower(2, reason: "Sheet Toggle Energy")
                     fx.notify(.success)
                 } label: {
-                    Label(tower.energyState == .energized ? "Set Tower Idle" : "Energize Tower", systemImage: "bolt.circle")
+                    Label(
+                        tower.energyState == .energized ? "Set Tower Idle" : "Energize Tower",
+                        systemImage: "bolt.circle"
+                    )
                 }
 
                 #if DEBUG
@@ -217,12 +206,12 @@ private struct WardenclyffeProgressSheet: View {
             }
 
             Section("Unlocked") {
-                ForEach(WardenclyffeUnlock.allCases, id: \.self) { u in
-                    HStack {
-                        Text(u.rawValue)
-                        Spacer()
-                        Image(systemName: progress.isUnlocked(u) ? "checkmark.circle.fill" : "lock.circle")
-                            .foregroundStyle(progress.isUnlocked(u) ? .primary : .secondary)
+                ForEach(WardenclyffeUnlock.allCases, id: \.self) { unlock in
+                    LabeledContent {
+                        Image(systemName: progress.isUnlocked(unlock) ? "checkmark.circle.fill" : "lock.circle")
+                            .foregroundStyle(progress.isUnlocked(unlock) ? .primary : .secondary)
+                    } label: {
+                        Text(unlock.rawValue)
                     }
                 }
             }
