@@ -4,23 +4,15 @@ import SwiftUI
 import UIKit
 
 enum WardenclyffeTheme {
-    /// Primary accent: Wardenclyffe blue.
     static let accent = Color(red: 28/255, green: 126/255, blue: 214/255)
-
-    /// Deep supporting color for gradients.
     static let accentSecondary = Color(red: 11/255, green: 23/255, blue: 44/255)
-
-    /// Midnight tone used by AR tower and deep surfaces (alias to accentSecondary).
     static let midnight = accentSecondary
-
-    /// Glow highlight for AR and accents.
     static let glow = Color(red: 165/255, green: 227/255, blue: 255/255)
 
-    /// Atmospheric background gradient that adapts well to light and dark mode.
     static let background = LinearGradient(
         colors: [
             Color(.systemBackground),
-            accent.opacity(0.06),
+            accent.opacity(0.05),
             Color(.secondarySystemBackground)
         ],
         startPoint: .topLeading,
@@ -28,42 +20,55 @@ enum WardenclyffeTheme {
     )
 }
 
-/// A reusable glass-like card style that respects Dynamic Type and dark mode.
-struct GlassCardStyle: ViewModifier {
+/// Content surfaces stay intentionally flatter than controls.
+/// On current Apple platforms, Liquid Glass is most effective for controls
+/// layered above content rather than as a blanket treatment for every card.
+struct WardenclyffeCardStyle: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     func body(content: Content) -> some View {
+        let cornerRadius: CGFloat = dynamicTypeSize.isAccessibilitySize ? 22 : 24
+
         content
             .padding(.horizontal, dynamicTypeSize.isAccessibilitySize ? 16 : 20)
             .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 12 : 14)
-            .background(.regularMaterial)
-            .clipShape(
-                RoundedRectangle(
-                    cornerRadius: dynamicTypeSize.isAccessibilitySize ? 22 : 24,
-                    style: .continuous
-                )
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(.primary.opacity(colorScheme == .dark ? 0.10 : 0.06))
             )
             .shadow(
-                color: Color.black.opacity(colorScheme == .dark ? 0.45 : 0.12),
-                radius: 18,
+                color: Color.black.opacity(colorScheme == .dark ? 0.22 : 0.08),
+                radius: 14,
                 x: 0,
-                y: 10
+                y: 7
             )
     }
 }
 
 extension View {
-    /// Apply the Wardenclyffe glass card style to any content.
+    /// Backward-compatible name used throughout the existing project.
+    /// The visual treatment now follows Apple's current content-surface guidance.
     func wardenclyffeGlassCard() -> some View {
-        modifier(GlassCardStyle())
+        modifier(WardenclyffeCardStyle())
     }
 
-    /// Standard section header: dynamic type, VoiceOver header trait.
     func wardenclyffeSectionHeader() -> some View {
         self
             .font(.title2.bold())
             .accessibilityAddTraits(.isHeader)
+    }
+
+    /// Adopt iOS 27's scroll-responsive navigation bar while preserving
+    /// compatibility with iOS 26.1, the app's current minimum deployment target.
+    @ViewBuilder
+    func wardenclyffeModernNavigationChrome() -> some View {
+        if #available(iOS 27.0, *) {
+            self.toolbarMinimizationBehavior(.onScrollDown, for: .navigationBar)
+        } else {
+            self
+        }
     }
 }
 
@@ -88,6 +93,7 @@ struct WardenclyffeAssetBanner: View {
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
+
                 Image(systemName: "photo")
                     .font(.largeTitle.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.45))
@@ -108,13 +114,16 @@ struct WardenclyffeAssetBanner: View {
                 Text(subtitle)
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.86))
-                    .lineLimit(2)
+                    .lineLimit(3)
             }
             .padding(14)
         }
         .frame(height: height)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(.white.opacity(0.10)))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(.white.opacity(0.10))
+        )
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title). \(subtitle)")
     }
